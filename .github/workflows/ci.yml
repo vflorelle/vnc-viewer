@@ -1,0 +1,118 @@
+# Vérifications à chaque envoi, exécutables en artefacts, et version publiée :
+# - en poussant une étiquette `v1.2.3` ;
+# - ou à la demande (onglet Actions, « Run workflow »), avec le numéro voulu.
+# Le numéro de la version publiée remplace celui de Cargo.toml dans les exécutables.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version à publier (ex. 1.2.3, ou 1.2.3-beta.1 pour une préversion) ; vide : compilation seule"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Format, lint, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+      - run: cargo test --locked --release
+
+  deny:
+    name: Dépendances (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  build:
+    name: Exécutables
+    needs: [check, deny]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      # zig sert d'éditeur de liens, comme dans build.sh sans Docker.
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Numéro de version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/v*) version="${GITHUB_REF_NAME#v}" ;;
+            *) version="$INPUT_VERSION" ;;
+          esac
+          if [ -n "$version" ]; then
+            echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || {
+              echo "Version invalide : $version (attendu : 1.2.3 ou 1.2.3-beta.1)" >&2
+              exit 1
+            }
+            sed -i "0,/^version = \".*\"/s//version = \"$version\"/" Cargo.toml
+            perl -0pi -e "s/(name = \"vnc-viewer\"\nversion = )\"[^\"]*\"/\$1\"$version\"/" Cargo.lock
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # Linux : glibc 2.17 demandée au plus (2012), pour démarrer sur les distributions anciennes
+      # quelle que soit la machine de compilation.
+      - run: cargo zigbuild --release --locked --target x86_64-unknown-linux-gnu.2.17
+      - run: cargo zigbuild --release --locked --target x86_64-pc-windows-gnu
+      - run: |
+          mkdir dist
+          cp target/x86_64-unknown-linux-gnu/release/vnc-viewer dist/vnc-viewer-linux-x86_64
+          cp target/x86_64-pc-windows-gnu/release/vnc-viewer.exe dist/vnc-viewer-windows-x86_64.exe
+          cd dist && sha256sum * > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vnc-viewer
+          path: dist/
+
+  release:
+    name: Publication
+    if: needs.build.outputs.version != ''
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vnc-viewer
+          path: dist
+      # L'étiquette est créée sur le commit compilé si elle n'existe pas (publication à la demande).
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          case "$VERSION" in *-*) prerelease=--prerelease ;; *) prerelease= ;; esac
+          gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "v$VERSION" --generate-notes $prerelease

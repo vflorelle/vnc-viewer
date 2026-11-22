@@ -1,0 +1,70 @@
+[package]
+name = "vnc-viewer"
+version = "0.1.0"
+edition = "2024"
+description = "Visionneuse VNC (RFB) sans compte : carnet d'adresses, chiffrement RA2, plusieurs sessions"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = [
+    "glow",
+    "default_fonts",
+    "clipboard",
+    "x11",
+    "wayland",
+] }
+# Configuration (carnet d'adresses, options) lisible et modifiable à la main
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+# Boîte d'erreur au démarrage
+rfd = "0.17"
+# Langue du système
+sys-locale = "0.3"
+# Presse-papiers lu à la reprise du focus (déjà utilisé par eframe)
+arboard = { version = "3", default-features = false }
+# Encodages zlib, ZRLE et Tight
+flate2 = "1"
+# Encodage Tight (JPEG)
+zune-jpeg = "0.5"
+# Authentification VNC (DES)
+des = "0.8"
+# Chiffrement RA2 (RSA-AES, AES-EAX) et authentification Apple (Diffie-Hellman, AES-ECB)
+rsa = "0.9"
+aes = "0.8"
+eax = "0.5"
+sha1 = "0.10"
+sha2 = "0.10"
+md-5 = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[target.'cfg(windows)'.dependencies]
+# Touches spéciales (Windows, Alt+Tab…) envoyées au serveur, mots de passe chiffrés (DPAPI), sonnerie
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_Input",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Raccourcis du bureau (touche Windows, Alt+Tab…) envoyés au serveur : inhibition sous Wayland,
+# clavier pris sous X11, sur la connexion de la couche des fenêtres (bibliothèques déjà utilisées)
+raw-window-handle = "0.6"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+x11-dl = "2.21"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Décodage (zlib, JPEG, RSA) rapide même en debug et dans les tests.
+[profile.dev.package."*"]
+opt-level = 3

@@ -1,0 +1,11 @@
+# Environnement de build : Rust (dernière version) + cross-compilation Windows (MinGW).
+FROM rust:latest
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 \
+ && rm -rf /var/lib/apt/lists/* \
+ && rustup target add x86_64-pc-windows-gnu \
+ && rustup component add clippy rustfmt
+
+ENV CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
+WORKDIR /src
