@@ -43,14 +43,17 @@ téléchargeables dans les artefacts de l'exécution. Pour publier une version, 
 - **à la demande** : onglet *Actions*, workflow *CI*, *Run workflow*, en indiquant le numéro
   (`1.2.3`, ou `1.2.3-beta.1` pour une préversion) ; l'étiquette `v1.2.3` est créée sur le
   commit compilé ;
-- **par une étiquette** : `git tag v1.2.3 && git push origin v1.2.3`.
+- **par une étiquette** : `git tag v1.2.3 && git push origin v1.2.3` ;
+- **depuis GitHub** : *Releases*, *Draft a new release*, avec une nouvelle étiquette `v1.2.3` ;
+  à la publication, les exécutables sont compilés puis ajoutés à cette version (quelques
+  minutes), qui garde le titre, les notes et la case préversion choisis.
 
 Le numéro donné remplace celui de `Cargo.toml` dans les exécutables (fenêtre *À propos*) ; celui
-du dépôt ne sert qu'aux compilations locales. La version GitHub créée contient
+du dépôt ne sert qu'aux compilations locales. La version GitHub contient
 `vnc-viewer-windows-x86_64.exe`, `vnc-viewer-linux-x86_64` (à rendre exécutable : `chmod +x`) et
-leurs sommes de contrôle (`SHA256SUMS`), avec des notes tirées des commits. L'exécutable Linux ne
-demande que la glibc 2.17 (2012) : il démarre sur toutes les distributions actuelles, et même
-bien plus anciennes.
+leurs sommes de contrôle (`SHA256SUMS`) ; créée par la CI, elle a des notes tirées des commits.
+L'exécutable Linux ne demande que la glibc 2.17 (2012) : il démarre sur toutes les distributions
+actuelles, et même bien plus anciennes.
 
 ## Licence
 

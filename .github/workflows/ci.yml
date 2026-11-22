@@ -1,5 +1,5 @@
 # Vérifications à chaque envoi, exécutables en artefacts, et version publiée :
-# - en poussant une étiquette `v1.2.3` ;
+# - en poussant une étiquette `v1.2.3`, ou par « Create a new release » sur GitHub ;
 # - ou à la demande (onglet Actions, « Run workflow »), avec le numéro voulu.
 # Le numéro de la version publiée remplace celui de Cargo.toml dans les exécutables.
 name: CI
@@ -108,11 +108,17 @@ jobs:
         with:
           name: vnc-viewer
           path: dist
-      # L'étiquette est créée sur le commit compilé si elle n'existe pas (publication à la demande).
+      # Version déjà créée sur GitHub (« Create a new release », qui pousse l'étiquette) : les
+      # exécutables y sont ajoutés, titre et notes gardés. Sinon elle est créée, avec l'étiquette
+      # sur le commit compilé si elle n'existe pas (publication à la demande).
       - env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          case "$VERSION" in *-*) prerelease=--prerelease ;; *) prerelease= ;; esac
-          gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "v$VERSION" --generate-notes $prerelease
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            case "$VERSION" in *-*) prerelease=--prerelease ;; *) prerelease= ;; esac
+            gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "v$VERSION" --generate-notes $prerelease
+          fi
